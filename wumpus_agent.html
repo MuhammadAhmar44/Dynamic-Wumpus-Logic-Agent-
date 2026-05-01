@@ -1,0 +1,1091 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wumpus Logic Agent</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0c10;
+  --panel: #0f1318;
+  --border: #1e2530;
+  --accent: #00f5c4;
+  --accent2: #ff4d6d;
+  --accent3: #ffd60a;
+  --text: #c8d8e8;
+  --dim: #4a5568;
+  --safe: #00b894;
+  --danger: #e53e3e;
+  --unknown: #2d3748;
+  --visited: #1a2744;
+  --agent: #00f5c4;
+  --wumpus: #ff6b35;
+  --pit: #6b46c1;
+  --gold: #ffd60a;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Share Tech Mono', monospace;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: 
+    radial-gradient(ellipse 60% 40% at 20% 80%, rgba(0,245,196,0.04) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 30% at 80% 20%, rgba(255,77,109,0.04) 0%, transparent 60%);
+  pointer-events: none;
+  z-index: 0;
+}
+.scanlines {
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+  pointer-events: none;
+  z-index: 1;
+}
+.container {
+  position: relative;
+  z-index: 2;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 20px;
+}
+header {
+  text-align: center;
+  padding: 30px 0 20px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 24px;
+}
+header h1 {
+  font-family: 'Orbitron', sans-serif;
+  font-size: clamp(1.4rem, 3vw, 2.2rem);
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+  text-shadow: 0 0 30px rgba(0,245,196,0.4);
+}
+header p {
+  font-size: 0.8rem;
+  color: var(--dim);
+  margin-top: 6px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+.main-grid {
+  display: grid;
+  grid-template-columns: 280px 1fr 280px;
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 1000px) {
+  .main-grid { grid-template-columns: 1fr; }
+}
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 16px;
+}
+.panel-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.65rem;
+  letter-spacing: 0.2em;
+  color: var(--accent);
+  text-transform: uppercase;
+  margin-bottom: 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.control-group { margin-bottom: 14px; }
+.control-group label {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--dim);
+  margin-bottom: 5px;
+  letter-spacing: 0.1em;
+}
+.control-group input[type="number"],
+.control-group select {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.85rem;
+  padding: 8px 10px;
+  border-radius: 3px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.control-group input:focus,
+.control-group select:focus { border-color: var(--accent); }
+.btn {
+  width: 100%;
+  padding: 10px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.65rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-bottom: 8px;
+}
+.btn-primary {
+  background: var(--accent);
+  color: var(--bg);
+  font-weight: 700;
+}
+.btn-primary:hover { background: #00ddb0; box-shadow: 0 0 15px rgba(0,245,196,0.4); }
+.btn-secondary {
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+}
+.btn-secondary:hover { background: rgba(0,245,196,0.08); }
+.btn-danger {
+  background: transparent;
+  border: 1px solid var(--accent2);
+  color: var(--accent2);
+}
+.btn-danger:hover { background: rgba(255,77,109,0.08); }
+.btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.speed-control { margin-bottom: 14px; }
+.speed-control label { font-size: 0.7rem; color: var(--dim); letter-spacing: 0.1em; display: block; margin-bottom: 5px; }
+.speed-control input[type="range"] { width: 100%; accent-color: var(--accent); }
+.grid-center { display: flex; flex-direction: column; align-items: center; }
+#grid-container {
+  position: relative;
+  display: inline-block;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.grid-row { display: flex; }
+.cell {
+  width: 60px;
+  height: 60px;
+  border: 1px solid rgba(30,37,48,0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  font-size: 1.3rem;
+  position: relative;
+  transition: background 0.3s;
+  cursor: default;
+}
+.cell.unknown { background: var(--unknown); }
+.cell.visited { background: var(--visited); }
+.cell.safe { background: rgba(0,184,148,0.15); border-color: rgba(0,184,148,0.3); }
+.cell.danger-confirmed { background: rgba(229,62,62,0.2); border-color: rgba(229,62,62,0.4); }
+.cell.agent-here { background: rgba(0,245,196,0.12); border-color: var(--accent); }
+.cell-coords {
+  position: absolute;
+  top: 2px;
+  left: 3px;
+  font-size: 0.45rem;
+  color: var(--dim);
+  line-height: 1;
+}
+.cell-percept {
+  position: absolute;
+  bottom: 2px;
+  font-size: 0.45rem;
+  color: var(--accent3);
+  letter-spacing: 0;
+}
+.cell-icon { font-size: 1.2rem; line-height: 1; }
+.cell-status {
+  position: absolute;
+  top: 2px;
+  right: 3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.cell-status.safe { background: var(--safe); }
+.cell-status.danger { background: var(--danger); }
+.metric-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.metric-row:last-child { border-bottom: none; }
+.metric-label { font-size: 0.68rem; color: var(--dim); letter-spacing: 0.08em; }
+.metric-value {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.9rem;
+  color: var(--accent);
+}
+.metric-value.red { color: var(--accent2); }
+.metric-value.yellow { color: var(--accent3); }
+.percept-display { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.percept-badge {
+  padding: 3px 8px;
+  border-radius: 2px;
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  border: 1px solid;
+}
+.percept-badge.breeze { border-color: #4299e1; color: #4299e1; background: rgba(66,153,225,0.1); }
+.percept-badge.stench { border-color: #68d391; color: #68d391; background: rgba(104,211,145,0.1); }
+.percept-badge.glitter { border-color: var(--gold); color: var(--gold); background: rgba(255,214,10,0.1); }
+.percept-badge.none { border-color: var(--dim); color: var(--dim); }
+.log-panel {
+  height: 200px;
+  overflow-y: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 8px;
+  margin-top: 10px;
+}
+.log-panel::-webkit-scrollbar { width: 4px; }
+.log-panel::-webkit-scrollbar-track { background: var(--bg); }
+.log-panel::-webkit-scrollbar-thumb { background: var(--border); }
+.log-entry {
+  font-size: 0.68rem;
+  line-height: 1.6;
+  color: var(--dim);
+  border-bottom: 1px solid rgba(30,37,48,0.5);
+  padding: 2px 0;
+}
+.log-entry.info { color: var(--text); }
+.log-entry.success { color: var(--accent); }
+.log-entry.warning { color: var(--accent3); }
+.log-entry.danger { color: var(--accent2); }
+.log-entry.inference { color: #a78bfa; }
+.kb-display {
+  max-height: 300px;
+  overflow-y: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 8px;
+  margin-top: 10px;
+  font-size: 0.62rem;
+  line-height: 1.7;
+  color: var(--dim);
+}
+.kb-display::-webkit-scrollbar { width: 4px; }
+.kb-display::-webkit-scrollbar-track { background: var(--bg); }
+.kb-display::-webkit-scrollbar-thumb { background: var(--border); }
+.kb-clause { color: #a78bfa; }
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  margin-bottom: 12px;
+  font-size: 0.7rem;
+}
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.status-dot.idle { background: var(--dim); }
+.status-dot.running { background: var(--accent); animation: pulse 1s infinite; }
+.status-dot.dead { background: var(--accent2); }
+.status-dot.won { background: var(--gold); }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 0.62rem;
+}
+.legend-item { display: flex; align-items: center; gap: 4px; }
+.legend-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+.inference-step {
+  background: rgba(167,139,250,0.05);
+  border: 1px solid rgba(167,139,250,0.2);
+  border-radius: 3px;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  font-size: 0.62rem;
+  color: #a78bfa;
+}
+.inference-step .step-label { color: var(--dim); font-size: 0.55rem; letter-spacing: 0.1em; text-transform: uppercase; }
+</style>
+</head>
+<body>
+<div class="scanlines"></div>
+<div class="container">
+  <header>
+    <h1>⚡ WUMPUS LOGIC AGENT</h1>
+    <p>Knowledge-Based Pathfinding · Propositional Logic · Resolution Refutation</p>
+  </header>
+
+  <div class="main-grid">
+    <div class="left-col">
+      <div class="panel">
+        <div class="panel-title">⚙ Configuration</div>
+        <div class="control-group">
+          <label>GRID ROWS</label>
+          <input type="number" id="rows" value="4" min="3" max="8">
+        </div>
+        <div class="control-group">
+          <label>GRID COLS</label>
+          <input type="number" id="cols" value="4" min="3" max="8">
+        </div>
+        <div class="control-group">
+          <label>PIT COUNT</label>
+          <input type="number" id="pitCount" value="3" min="1" max="8">
+        </div>
+        <div class="speed-control">
+          <label>AGENT SPEED: <span id="speedLabel">500ms</span></label>
+          <input type="range" id="speed" min="100" max="2000" value="500" step="100">
+        </div>
+        <button class="btn btn-primary" id="btnNew">▶ NEW EPISODE</button>
+        <button class="btn btn-secondary" id="btnStep" disabled>⏭ STEP</button>
+        <button class="btn btn-secondary" id="btnRun" disabled>⚡ RUN AUTO</button>
+        <button class="btn btn-danger" id="btnStop" disabled>■ STOP</button>
+
+        <div class="legend">
+          <div class="legend-item"><div class="legend-dot" style="background:var(--agent)"></div>Agent</div>
+          <div class="legend-item"><div class="legend-dot" style="background:rgba(0,184,148,0.4)"></div>Safe</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--unknown)"></div>Unknown</div>
+          <div class="legend-item"><div class="legend-dot" style="background:rgba(229,62,62,0.4)"></div>Danger</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--visited)"></div>Visited</div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:16px">
+        <div class="panel-title">📡 Percepts</div>
+        <div class="metric-row">
+          <span class="metric-label">POSITION</span>
+          <span class="metric-value" id="metPos">—</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">ACTIVE</span>
+          <div class="percept-display" id="perceptDisplay">
+            <span class="percept-badge none">NONE</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-center">
+      <div class="status-bar">
+        <div class="status-dot idle" id="statusDot"></div>
+        <span id="statusText">Awaiting initialization...</span>
+      </div>
+      <div id="grid-container"></div>
+
+      <div class="panel" style="margin-top:16px; width:100%">
+        <div class="panel-title">📋 Agent Log</div>
+        <div class="log-panel" id="logPanel"></div>
+      </div>
+    </div>
+
+    <div class="right-col">
+      <div class="panel">
+        <div class="panel-title">📊 Metrics</div>
+        <div class="metric-row">
+          <span class="metric-label">STEPS TAKEN</span>
+          <span class="metric-value" id="metSteps">0</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">INFERENCE OPS</span>
+          <span class="metric-value" id="metInference">0</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">CELLS VISITED</span>
+          <span class="metric-value" id="metVisited">0</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">KB CLAUSES</span>
+          <span class="metric-value" id="metKB">0</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">SAFE PROVED</span>
+          <span class="metric-value" id="metSafe">0</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">STATUS</span>
+          <span class="metric-value" id="metStatus">IDLE</span>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:16px">
+        <div class="panel-title">🧠 Knowledge Base</div>
+        <div class="kb-display" id="kbDisplay">KB empty. Start a new episode.</div>
+      </div>
+
+      <div class="panel" style="margin-top:16px">
+        <div class="panel-title">🔍 Last Inference</div>
+        <div id="inferenceDetail" style="font-size:0.65rem; color:var(--dim); margin-top:6px">
+          No inference yet.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+class WumpusWorld {
+  constructor(rows, cols, pitCount) {
+    this.rows = rows;
+    this.cols = cols;
+    this.pitCount = pitCount;
+    this.grid = [];
+    this.agentRow = this.rows - 1;
+    this.agentCol = 0;
+    this.alive = true;
+    this.goldFound = false;
+    this.visited = new Set();
+    this.initGrid();
+    this.placeHazards();
+  }
+
+  initGrid() {
+    for (let r = 0; r < this.rows; r++) {
+      this.grid[r] = [];
+      for (let c = 0; c < this.cols; c++) {
+        this.grid[r][c] = { pit: false, wumpus: false, gold: false, breeze: false, stench: false };
+      }
+    }
+  }
+
+  placeHazards() {
+    const reserved = `${this.rows-1},0`;
+    const cells = [];
+    for (let r = 0; r < this.rows; r++)
+      for (let c = 0; c < this.cols; c++)
+        if (`${r},${c}` !== reserved) cells.push([r,c]);
+    
+    this.shuffle(cells);
+    
+    let placed = 0;
+    for (const [r,c] of cells) {
+      if (placed >= this.pitCount) break;
+      this.grid[r][c].pit = true;
+      placed++;
+    }
+
+    for (const [r,c] of cells) {
+      if (!this.grid[r][c].pit) { this.grid[r][c].wumpus = true; break; }
+    }
+
+    for (const [r,c] of cells) {
+      if (!this.grid[r][c].pit && !this.grid[r][c].wumpus) { this.grid[r][c].gold = true; break; }
+    }
+
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.cols; c++) {
+        if (this.grid[r][c].pit) {
+          for (const [nr,nc] of this.neighbors(r,c)) {
+            this.grid[nr][nc].breeze = true;
+          }
+        }
+        if (this.grid[r][c].wumpus) {
+          for (const [nr,nc] of this.neighbors(r,c)) {
+            this.grid[nr][nc].stench = true;
+          }
+        }
+      }
+    }
+  }
+
+  shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i+1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
+  neighbors(r,c) {
+    const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+    return dirs.map(([dr,dc])=>[r+dr,c+dc]).filter(([nr,nc])=>nr>=0&&nr<this.rows&&nc>=0&&nc<this.cols);
+  }
+
+  getPercepts(r,c) {
+    const cell = this.grid[r][c];
+    const percepts = [];
+    if (cell.breeze) percepts.push('BREEZE');
+    if (cell.stench) percepts.push('STENCH');
+    if (cell.gold) percepts.push('GLITTER');
+    return percepts;
+  }
+
+  isHazard(r,c) {
+    const cell = this.grid[r][c];
+    return cell.pit || cell.wumpus;
+  }
+}
+
+class KnowledgeBase {
+  constructor() {
+    this.clauses = [];
+    this.facts = new Map();
+  }
+
+  tell(formula) {
+    const cnfClauses = this.toCNF(formula);
+    for (const clause of cnfClauses) {
+      const key = clause.slice().sort().join('|');
+      const exists = this.clauses.some(c => c.slice().sort().join('|') === key);
+      if (!exists) this.clauses.push(clause);
+    }
+  }
+
+  tellFact(literal) {
+    const key = literal;
+    if (!this.facts.has(key)) {
+      this.facts.set(key, true);
+      this.clauses.push([literal]);
+    }
+  }
+
+  toCNF(formula) {
+    const clauses = [];
+    if (formula.type === 'biconditional') {
+      const { left, right } = formula;
+      clauses.push(...this.toCNF({ type: 'implication', left, right }));
+      clauses.push(...this.toCNF({ type: 'implication', left: right, right: left }));
+    } else if (formula.type === 'implication') {
+      const negLeft = this.negateFormula(formula.left);
+      clauses.push(...this.toCNF({ type: 'or', operands: [negLeft, formula.right] }));
+    } else if (formula.type === 'or') {
+      const resolved = [];
+      let complex = false;
+      for (const op of formula.operands) {
+        if (op.type === 'literal') {
+          resolved.push(op.value);
+        } else if (op.type === 'and') {
+          complex = true;
+          for (const sub of op.operands) {
+            const subClauses = this.toCNF({ type: 'or', operands: formula.operands.filter(o=>o!==op).concat([sub]) });
+            clauses.push(...subClauses);
+          }
+          break;
+        } else {
+          const sub = this.toCNF(op);
+          if (sub.length === 1) resolved.push(...sub[0]);
+          else complex = true;
+        }
+      }
+      if (!complex) clauses.push(resolved);
+    } else if (formula.type === 'and') {
+      for (const op of formula.operands) {
+        clauses.push(...this.toCNF(op));
+      }
+    } else if (formula.type === 'literal') {
+      clauses.push([formula.value]);
+    }
+    return clauses;
+  }
+
+  negateFormula(formula) {
+    if (formula.type === 'literal') {
+      const v = formula.value;
+      return { type: 'literal', value: v.startsWith('~') ? v.slice(1) : '~'+v };
+    } else if (formula.type === 'and') {
+      return { type: 'or', operands: formula.operands.map(o=>this.negateFormula(o)) };
+    } else if (formula.type === 'or') {
+      return { type: 'and', operands: formula.operands.map(o=>this.negateFormula(o)) };
+    }
+    return formula;
+  }
+
+  resolve(c1, c2) {
+    for (const lit of c1) {
+      const neg = lit.startsWith('~') ? lit.slice(1) : '~'+lit;
+      if (c2.includes(neg)) {
+        const resolvent = [...c1.filter(l=>l!==lit), ...c2.filter(l=>l!==neg)];
+        const unique = [...new Set(resolvent)];
+        return unique;
+      }
+    }
+    return null;
+  }
+
+  askSafe(row, col, rows, cols) {
+    const steps = [];
+    const negPit = `~P_${row}_${col}`;
+    const negWumpus = `~W_${row}_${col}`;
+    const proofClauses = [...this.clauses.map(c=>[...c])];
+    proofClauses.push([`P_${row}_${col}`]);
+    proofClauses.push([`W_${row}_${col}`]);
+
+    steps.push({ label: 'Query', text: `Prove: ${negPit} ∧ ${negWumpus}` });
+    steps.push({ label: 'Negation Added', text: `Added ¬(${negPit} ∧ ${negWumpus}) → [P_${row}_${col}], [W_${row}_${col}]` });
+
+    const pitSafe = this.resolveForContradiction([...this.clauses.map(c=>[...c])], `P_${row}_${col}`, steps, 'PIT');
+    const wumpusSafe = this.resolveForContradiction([...this.clauses.map(c=>[...c])], `W_${row}_${col}`, steps, 'WUMPUS');
+
+    return { safe: pitSafe && wumpusSafe, steps };
+  }
+
+  resolveForContradiction(baseClauses, literal, steps, type) {
+    const clauses = [...baseClauses, [literal]];
+    const maxIter = 100;
+    let iter = 0;
+    const seen = new Set(clauses.map(c=>c.slice().sort().join('|')));
+
+    while (iter < maxIter) {
+      iter++;
+      let newAdded = false;
+      for (let i = 0; i < clauses.length; i++) {
+        for (let j = i+1; j < clauses.length; j++) {
+          const resolvent = this.resolve(clauses[i], clauses[j]);
+          if (resolvent === null) continue;
+          if (resolvent.length === 0) {
+            steps.push({ label: `${type} Contradiction`, text: `Resolved [${clauses[i].join(',')}] ∧ [${clauses[j].join(',')}] → □ (empty clause)` });
+            return true;
+          }
+          const key = resolvent.slice().sort().join('|');
+          if (!seen.has(key)) {
+            seen.add(key);
+            clauses.push(resolvent);
+            newAdded = true;
+          }
+        }
+      }
+      if (!newAdded) break;
+    }
+    return false;
+  }
+}
+
+class WumpusAgent {
+  constructor(world) {
+    this.world = world;
+    this.kb = new KnowledgeBase();
+    this.row = world.agentRow;
+    this.col = world.agentCol;
+    this.visited = new Set();
+    this.safeProved = new Set();
+    this.dangerProved = new Set();
+    this.steps = 0;
+    this.inferenceOps = 0;
+    this.alive = true;
+    this.won = false;
+    this.log = [];
+    this.frontier = [];
+    this.initKB();
+  }
+
+  initKB() {
+    const { rows, cols } = this.world;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const neighbors = this.world.neighbors(r,c);
+        const pitNeighbors = neighbors.map(([nr,nc])=>({ type:'literal', value:`P_${nr}_${nc}` }));
+        const wumpusNeighbors = neighbors.map(([nr,nc])=>({ type:'literal', value:`W_${nr}_${nc}` }));
+
+        if (pitNeighbors.length > 0) {
+          this.kb.tell({
+            type: 'biconditional',
+            left: { type: 'literal', value: `B_${r}_${c}` },
+            right: pitNeighbors.length === 1 ? pitNeighbors[0] : { type: 'or', operands: pitNeighbors }
+          });
+        }
+
+        if (wumpusNeighbors.length > 0) {
+          this.kb.tell({
+            type: 'biconditional',
+            left: { type: 'literal', value: `S_${r}_${c}` },
+            right: wumpusNeighbors.length === 1 ? wumpusNeighbors[0] : { type: 'or', operands: wumpusNeighbors }
+          });
+        }
+      }
+    }
+
+    this.kb.tellFact(`~P_${this.row}_${this.col}`);
+    this.kb.tellFact(`~W_${this.row}_${this.col}`);
+    this.safeProved.add(`${this.row},${this.col}`);
+  }
+
+  perceiveAndUpdate() {
+    const { row, col } = this;
+    const percepts = this.world.getPercepts(row, col);
+    const key = `${row},${col}`;
+    this.visited.add(key);
+
+    if (percepts.includes('GLITTER')) {
+      this.won = true;
+      this.addLog(`🏆 GOLD FOUND at (${row},${col})!`, 'success');
+      return percepts;
+    }
+
+    if (percepts.includes('BREEZE')) {
+      this.kb.tellFact(`B_${row}_${col}`);
+      this.addLog(`💨 Breeze at (${row},${col}) → telling KB: B_${row}_${col}`, 'warning');
+    } else {
+      this.kb.tellFact(`~B_${row}_${col}`);
+      const neighbors = this.world.neighbors(row, col);
+      for (const [nr,nc] of neighbors) {
+        this.kb.tellFact(`~P_${nr}_${nc}`);
+        this.safeProved.add(`${nr},${nc}`);
+      }
+      this.addLog(`No breeze at (${row},${col}) → neighbors are pit-free`, 'success');
+    }
+
+    if (percepts.includes('STENCH')) {
+      this.kb.tellFact(`S_${row}_${col}`);
+      this.addLog(`🦨 Stench at (${row},${col}) → telling KB: S_${row}_${col}`, 'warning');
+    } else {
+      this.kb.tellFact(`~S_${row}_${col}`);
+      const neighbors = this.world.neighbors(row, col);
+      for (const [nr,nc] of neighbors) {
+        this.kb.tellFact(`~W_${nr}_${nc}`);
+        this.safeProved.add(`${nr},${nc}`);
+      }
+      this.addLog(`No stench at (${row},${col}) → neighbors are wumpus-free`, 'success');
+    }
+
+    return percepts;
+  }
+
+  chooseNextCell() {
+    const candidates = [];
+    for (const [nr,nc] of this.world.neighbors(this.row, this.col)) {
+      const key = `${nr},${nc}`;
+      if (!this.visited.has(key)) candidates.push([nr,nc,key]);
+    }
+
+    for (const [nr,nc,key] of candidates) {
+      if (this.safeProved.has(key)) {
+        this.addLog(`✅ (${nr},${nc}) already proved safe`, 'success');
+        return [nr,nc];
+      }
+    }
+
+    for (const [nr,nc,key] of candidates) {
+      if (this.dangerProved.has(key)) continue;
+      this.addLog(`🔍 Querying KB: is (${nr},${nc}) safe?`, 'inference');
+      this.inferenceOps++;
+      const { safe, steps: infSteps } = this.kb.askSafe(nr, nc, this.world.rows, this.world.cols);
+      this.inferenceOps += infSteps.length;
+      this.lastInferenceSteps = infSteps;
+      if (safe) {
+        this.safeProved.add(key);
+        this.addLog(`✅ Resolution proved (${nr},${nc}) is SAFE`, 'success');
+        return [nr,nc];
+      } else {
+        this.addLog(`⚠ Cannot prove (${nr},${nc}) safe, marking uncertain`, 'warning');
+      }
+    }
+
+    const visited = [...this.visited];
+    for (const v of visited) {
+      const [vr,vc] = v.split(',').map(Number);
+      for (const [nr,nc] of this.world.neighbors(vr,vc)) {
+        const key = `${nr},${nc}`;
+        if (!this.visited.has(key) && this.safeProved.has(key)) {
+          return [nr,nc];
+        }
+      }
+    }
+
+    const unvisited = candidates.filter(([,,,key])=>!this.dangerProved.has(key));
+    if (unvisited.length > 0) {
+      const [nr,nc] = unvisited[Math.floor(Math.random()*unvisited.length)];
+      this.addLog(`❓ No safe move found, taking risk at (${nr},${nc})`, 'danger');
+      return [nr,nc];
+    }
+
+    this.addLog(`🚫 No valid moves remaining`, 'danger');
+    return null;
+  }
+
+  moveTo(r, c) {
+    this.row = r;
+    this.col = c;
+    this.steps++;
+    this.addLog(`🚶 Moved to (${r},${c})`, 'info');
+
+    if (this.world.isHazard(r, c)) {
+      this.alive = false;
+      const cell = this.world.grid[r][c];
+      if (cell.pit) this.addLog(`💀 FELL INTO PIT at (${r},${c})!`, 'danger');
+      if (cell.wumpus) this.addLog(`💀 EATEN BY WUMPUS at (${r},${c})!`, 'danger');
+    }
+  }
+
+  addLog(msg, type='info') {
+    this.log.push({ msg, type, step: this.steps });
+  }
+
+  doStep() {
+    if (!this.alive || this.won) return false;
+    const percepts = this.perceiveAndUpdate();
+    if (this.won || !this.alive) return false;
+    const next = this.chooseNextCell();
+    if (!next) { this.addLog('Agent is stuck — no moves available.', 'danger'); return false; }
+    this.moveTo(next[0], next[1]);
+    return true;
+  }
+}
+
+let world = null;
+let agent = null;
+let running = false;
+let runInterval = null;
+let allLogs = [];
+
+function getSpeed() { return parseInt($('speed').value); }
+
+$('speed').addEventListener('input', () => {
+  $('speedLabel').textContent = getSpeed() + 'ms';
+});
+
+$('btnNew').addEventListener('click', () => {
+  const rows = Math.max(3, Math.min(8, parseInt($('rows').value)||4));
+  const cols = Math.max(3, Math.min(8, parseInt($('cols').value)||4));
+  const pits = Math.max(1, Math.min(8, parseInt($('pitCount').value)||3));
+  stopRun();
+  world = new WumpusWorld(rows, cols, pits);
+  agent = new WumpusAgent(world);
+  allLogs = [];
+  renderGrid();
+  updateMetrics();
+  updateKB();
+  updatePercepts([]);
+  setStatus('running', 'Episode started. Agent at ('+agent.row+','+agent.col+')');
+  $('btnStep').disabled = false;
+  $('btnRun').disabled = false;
+  $('btnStop').disabled = true;
+  $('metStatus').textContent = 'ACTIVE';
+  $('metStatus').className = 'metric-value';
+  addToLog('🌍 New episode initialized. Grid: '+rows+'×'+cols+', Pits: '+pits, 'success');
+  addToLog('🤖 Agent at ('+agent.row+','+agent.col+'). Start position safe.', 'info');
+  const percepts = world.getPercepts(agent.row, agent.col);
+  agent.perceiveAndUpdate();
+  updatePercepts(percepts);
+  renderGrid();
+  updateMetrics();
+  updateKB();
+  flushAgentLogs();
+});
+
+$('btnStep').addEventListener('click', () => {
+  if (!agent || !agent.alive || agent.won) return;
+  performStep();
+});
+
+$('btnRun').addEventListener('click', () => {
+  if (!agent) return;
+  running = true;
+  $('btnRun').disabled = true;
+  $('btnStop').disabled = false;
+  $('btnStep').disabled = true;
+  runInterval = setInterval(() => {
+    if (!agent.alive || agent.won) { stopRun(); return; }
+    performStep();
+  }, getSpeed());
+});
+
+$('btnStop').addEventListener('click', stopRun);
+
+function stopRun() {
+  running = false;
+  clearInterval(runInterval);
+  $('btnRun').disabled = false;
+  $('btnStop').disabled = true;
+  if (agent) $('btnStep').disabled = false;
+}
+
+function performStep() {
+  if (!agent || !agent.alive || agent.won) { stopRun(); return; }
+  const canContinue = agent.doStep();
+  renderGrid();
+  updateMetrics();
+  updateKB();
+  const percepts = world.getPercepts(agent.row, agent.col);
+  updatePercepts(percepts);
+  flushAgentLogs();
+  updateInferenceDetail();
+
+  if (!agent.alive) {
+    setStatus('dead', '💀 Agent died!');
+    $('metStatus').textContent = 'DEAD';
+    $('metStatus').className = 'metric-value red';
+    stopRun();
+    $('btnStep').disabled = true;
+  } else if (agent.won) {
+    setStatus('won', '🏆 Gold found! Agent wins!');
+    $('metStatus').textContent = 'WON';
+    $('metStatus').className = 'metric-value yellow';
+    stopRun();
+    $('btnStep').disabled = true;
+  } else if (!canContinue) {
+    setStatus('idle', 'Agent stuck — no valid moves.');
+    $('metStatus').textContent = 'STUCK';
+    stopRun();
+    $('btnStep').disabled = true;
+  }
+}
+
+function flushAgentLogs() {
+  const panel = $('logPanel');
+  while (agent.log.length) {
+    const entry = agent.log.shift();
+    addToLog(entry.msg, entry.type);
+  }
+}
+
+function addToLog(msg, type='info') {
+  const panel = $('logPanel');
+  const div = document.createElement('div');
+  div.className = `log-entry ${type}`;
+  div.textContent = `[${String(agent ? agent.steps : 0).padStart(3,'0')}] ${msg}`;
+  panel.appendChild(div);
+  panel.scrollTop = panel.scrollHeight;
+}
+
+function setStatus(type, text) {
+  const dot = $('statusDot');
+  dot.className = `status-dot ${type}`;
+  $('statusText').textContent = text;
+}
+
+function renderGrid() {
+  if (!world || !agent) return;
+  const container = $('grid-container');
+  container.innerHTML = '';
+  for (let r = 0; r < world.rows; r++) {
+    const rowEl = document.createElement('div');
+    rowEl.className = 'grid-row';
+    for (let c = 0; c < world.cols; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      const key = `${r},${c}`;
+      const isAgent = agent.row === r && agent.col === c;
+      const isVisited = agent.visited.has(key);
+      const isSafe = agent.safeProved.has(key);
+      const isDanger = agent.dangerProved.has(key);
+      const worldCell = world.grid[r][c];
+      const isRevealed = !agent.alive || agent.won;
+
+      if (isAgent) cell.classList.add('agent-here');
+      else if (isDanger) cell.classList.add('danger-confirmed');
+      else if (isSafe) cell.classList.add('safe');
+      else if (isVisited) cell.classList.add('visited');
+      else cell.classList.add('unknown');
+
+      const coords = document.createElement('div');
+      coords.className = 'cell-coords';
+      coords.textContent = `${r},${c}`;
+      cell.appendChild(coords);
+
+      const icon = document.createElement('div');
+      icon.className = 'cell-icon';
+
+      if (isAgent) {
+        icon.textContent = '🤖';
+      } else if (isRevealed) {
+        if (worldCell.pit) icon.textContent = '🕳';
+        else if (worldCell.wumpus) icon.textContent = '👹';
+        else if (worldCell.gold) icon.textContent = '💰';
+        else icon.textContent = '';
+      } else if (isVisited) {
+        icon.textContent = '';
+      } else {
+        icon.textContent = '❓';
+      }
+      cell.appendChild(icon);
+
+      if (isVisited && !isAgent) {
+        const perc = world.getPercepts(r, c);
+        if (perc.length > 0) {
+          const p = document.createElement('div');
+          p.className = 'cell-percept';
+          p.textContent = perc.map(x => x[0]).join('');
+          cell.appendChild(p);
+        }
+      }
+
+      if (isSafe && !isAgent) {
+        const dot = document.createElement('div');
+        dot.className = 'cell-status safe';
+        cell.appendChild(dot);
+      } else if (isDanger) {
+        const dot = document.createElement('div');
+        dot.className = 'cell-status danger';
+        cell.appendChild(dot);
+      }
+
+      rowEl.appendChild(cell);
+    }
+    container.appendChild(rowEl);
+  }
+}
+
+function updatePercepts(percepts) {
+  if (!agent) return;
+  $('metPos').textContent = `(${agent.row}, ${agent.col})`;
+  const display = $('perceptDisplay');
+  display.innerHTML = '';
+  if (percepts.length === 0) {
+    display.innerHTML = '<span class="percept-badge none">NONE</span>';
+  } else {
+    for (const p of percepts) {
+      const badge = document.createElement('span');
+      badge.className = `percept-badge ${p.toLowerCase()}`;
+      badge.textContent = p;
+      display.appendChild(badge);
+    }
+  }
+}
+
+function updateMetrics() {
+  if (!agent) return;
+  $('metSteps').textContent = agent.steps;
+  $('metInference').textContent = agent.inferenceOps;
+  $('metVisited').textContent = agent.visited.size;
+  $('metKB').textContent = agent.kb.clauses.length;
+  $('metSafe').textContent = agent.safeProved.size;
+}
+
+function updateKB() {
+  if (!agent) return;
+  const display = $('kbDisplay');
+  display.innerHTML = '';
+  const clauses = agent.kb.clauses.slice(-40);
+  if (clauses.length === 0) { display.textContent = 'KB empty.'; return; }
+  for (const clause of clauses) {
+    const div = document.createElement('div');
+    div.className = 'kb-clause';
+    div.textContent = '[' + clause.join(' ∨ ') + ']';
+    display.appendChild(div);
+  }
+  display.scrollTop = display.scrollHeight;
+}
+
+function updateInferenceDetail() {
+  if (!agent || !agent.lastInferenceSteps) return;
+  const detail = $('inferenceDetail');
+  detail.innerHTML = '';
+  for (const step of agent.lastInferenceSteps) {
+    const div = document.createElement('div');
+    div.className = 'inference-step';
+    div.innerHTML = `<div class="step-label">${step.label}</div><div>${step.text}</div>`;
+    detail.appendChild(div);
+  }
+}
+</script>
+</body>
+</html>
